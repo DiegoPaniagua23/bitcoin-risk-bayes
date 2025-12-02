@@ -14,9 +14,10 @@ bitcoin-risk-bayes/
 ├── src/                # Código fuente del proyecto
 │   ├── garch/          # Implementación del modelo GJR-GARCH
 │   ├── mcmc/           # Implementación del Gibbs Sampler (Numba)
-│   └── utils/          # Funciones de utilidad y helpers
+│   ├── utils/          # Funciones de utilidad y helpers
+│   │   └── download_data.py # Script para descarga de datos
+│   └── main.py         # Punto de entrada principal
 ├── prompts/            # Documentación de prompts y propuestas
-├── download_data.py    # Script para descarga de datos
 ├── pyproject.toml      # Configuración de dependencias (uv)
 └── README.md           # Documentación general
 ```
@@ -42,7 +43,7 @@ uv sync
 
 ### 3. Descargar datos
 ```bash
-uv run python download_data.py
+uv run python src/utils/download_data.py
 ```
 
 ## 🛠️ Stack Tecnológico
