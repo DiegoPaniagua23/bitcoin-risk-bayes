@@ -210,3 +210,22 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.abs
+*.xmpi
+*.xmpdata
+
+# PDF files
+*.pdf
+
+# Build directories
+report/out/
