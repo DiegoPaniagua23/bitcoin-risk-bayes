@@ -79,7 +79,7 @@ email=diego.paniagua@cimat.mx,
 % \end{abstract}
 
 \begin{abstract}
-  Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización mediante compilación Just-In-Time (JIT) con Numba, logrando tiempos de inferencia competitivos, y el uso de Bootstrap de Bloques para validar supuestos distribucionales. Los resultados muestran que, si bien la implementación Bayesiana es eficiente, el modelo de punto de cambio simple resulta excesivamente conservador. En contraste, el modelo GJR-GARCH demostró una calibración superior del riesgo de cola al superar la prueba de Kupiec, adaptándose mejor a la rápida reversión a la media de la volatilidad del criptoactivo.
+  Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización mediante compilación Just-In-Time (JIT) con Numba, logrando tiempos de inferencia competitivos, y el uso de Bootstrap de Bloques para validar supuestos distribucionales. Los resultados muestran que la implementación Bayesiana con estrategia de ventana móvil (Rolling Window) logra una adaptación dinámica comparable al modelo econométrico. Ambos modelos superaron la prueba de Kupiec, demostrando una calibración adecuada del riesgo de cola. Mientras el GJR-GARCH destaca por su eficiencia recursiva, el enfoque Bayesiano ofrece robustez mediante la re-estimación diaria de regímenes de volatilidad local.
 \end{abstract}
 
 
@@ -274,6 +274,16 @@ El diseño experimental se dividió en tres fases: calibración, diagnóstico e 
 \subsection{Implementación Computacional}
 El modelo GJR-GARCH se implementó utilizando la librería \texttt{arch} de Python. Para el modelo Bayesiano, el Muestreador de Gibbs se desarrolló desde cero. Dado que Python es un lenguaje interpretado, los bucles anidados requeridos para MCMC son ineficientes. Para solucionar esto, se utilizó el decorador \texttt{@jit(nopython=True)} de la librería \texttt{Numba}, que compila las funciones críticas a código máquina LLVM en tiempo de ejecución. Esto permitió realizar 10,000 iteraciones de la cadena de Markov en segundos.
 
+\subsection{Estrategia de Estimación Temporal}
+Una diferencia fundamental entre los modelos comparados radica en su mecanismo de actualización de información:
+
+\begin{itemize}
+    \item \textbf{GJR-GARCH:} Este modelo opera de manera recursiva con memoria teóricamente infinita. La volatilidad de hoy $\sigma_t^2$ depende explícitamente de la volatilidad de ayer $\sigma_{t-1}^2$ y del shock de ayer $\epsilon_{t-1}^2$. El algoritmo se inicializa en $t=0$ (usualmente con la varianza incondicional) y evoluciona paso a paso, incorporando nueva información instantáneamente a través de la ecuación de actualización.
+    
+    \item \textbf{MCMC (Ventana Móvil):} A diferencia del enfoque recursivo, el modelo Bayesiano de punto de cambio no tiene una estructura autorregresiva explícita. Para capturar la dinámica temporal, se implementó una estrategia de \textit{Rolling Window} de tamaño fijo $W=365$ días.
+    Para cada día $t$, el modelo se re-entrena utilizando exclusivamente el conjunto de información $\mathcal{F}_{t-1} = \{r_{t-W}, \dots, r_{t-1}\}$. El Gibbs Sampler identifica el régimen de volatilidad vigente al final de esta ventana y lo utiliza como predictor para $\sigma_t$. Esta técnica permite que el modelo se adapte a cambios estructurales recientes, "olvidando" regímenes antiguos que ya no son relevantes, aunque a un costo computacional significativamente mayor que el enfoque recursivo.
+\end{itemize}
+
 \subsection{Validación de Riesgo (Backtesting)}
 La validación de los modelos de riesgo es un paso crítico para asegurar que las estimaciones de pérdida potencial sean fiables. En este estudio, se evaluó el desempeño predictivo mediante el cálculo del Valor en Riesgo (VaR) al 95\% de confianza. El backtesting consiste en comparar las predicciones ex-ante del VaR con los retornos ex-post observados.
 
@@ -415,22 +425,22 @@ La Tabla \ref{tab:kupiec} resume los resultados del backtesting para un nivel de
 Modelo & Fallos & Tasa Obs. & p-value & Decisión \\
 \midrule
 GARCH & 102 & 0.0550 & 0.3345 & Acepta \\
-MCMC & 73 & 0.0393 & 0.0287 & Rechaza \\
+MCMC (Rolling) & 97 & 0.0523 & 0.6569 & Acepta \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-El modelo GJR-GARCH pasó la prueba de Kupiec con un p-value de 0.3345. Su tasa de fallos (5.5\%) es muy cercana al nivel teórico esperado (5\%), lo que indica una calibración adecuada.
+Ambos modelos superaron satisfactoriamente la prueba de Kupiec. El modelo GJR-GARCH presentó una tasa de fallos del 5.50\% (p-value 0.3345), confirmando su robustez.
 
-En contraste, el modelo MCMC fue rechazado (p-value 0.0287) por ser demasiado conservador (tasa de fallos 3.93\% $<$ 5\%). Esto se debe a que el modelo de punto de cambio simple asume una varianza constante dentro de cada régimen. Al promediar la volatilidad sobre periodos largos, el modelo tiende a sobreestimar el riesgo en días de calma relativa que ocurren dentro de un régimen de alta volatilidad, resultando en un VaR innecesariamente alto (más negativo).
+Por su parte, la implementación del modelo MCMC con ventana móvil de 365 días logró una tasa de fallos del 5.23\%, extremadamente cercana al nivel teórico del 5\%. Con un p-value de 0.6569, no existe evidencia estadística para rechazar la hipótesis nula de cobertura correcta. Esto demuestra que, al permitir que el modelo Bayesiano actualice sus parámetros dinámicamente, se elimina el sesgo conservador observado en implementaciones estáticas, logrando una calibración de riesgo altamente competitiva.
 
 \subsection{Análisis de Residuos}
-El análisis de Bootstrap sobre los residuos del modelo MCMC generó un intervalo de confianza al 95\% para el cuantil 5\% de $[-1.6800, -1.2909]$. El valor teórico de la distribución normal estándar es $-1.645$. Dado que este valor cae dentro del intervalo (aunque cerca del límite inferior), la asunción de normalidad condicional no es descartable estadísticamente, pero la amplitud del intervalo sugiere incertidumbre considerable sobre la forma de la cola izquierda.
+El análisis de Bootstrap sobre los residuos del modelo MCMC generó un intervalo de confianza al 95\% para el cuantil 5\% de $[-1.8402, -1.4626]$. El valor teórico de la distribución normal estándar es $-1.645$. Dado que este valor cae cómodamente dentro del intervalo, la asunción de normalidad condicional dentro de cada régimen es razonable y estadísticamente consistente con los datos observados.
 
 \begin{figure}[h]
   \centering
   \includegraphics[width=\linewidth]{../results/figures/model_comparison.png}
-  \caption{Comparación de VaR estimado por GARCH vs MCMC y retornos de Bitcoin. Se observan los ``clusters'' de volatilidad y cómo el GARCH (azul) se adapta rápidamente, mientras que el MCMC (morado) mantiene niveles más constantes por tramos.}
+  \caption{Comparación de VaR estimado por GARCH vs MCMC y retornos de Bitcoin. Se observa cómo ambos modelos reaccionan a los clusters de volatilidad, con el MCMC (morado) adaptándose dinámicamente gracias a la ventana móvil.}
   \label{fig:comparison}
 \end{figure}
 
@@ -439,9 +449,9 @@ El análisis de Bootstrap sobre los residuos del modelo MCMC generó un interval
 
 Este estudio contrastó un enfoque econométrico clásico (GJR-GARCH) frente a uno bayesiano computacionalmente intensivo (MCMC) para la gestión de riesgo en Bitcoin. Los resultados demuestran que:
 \begin{enumerate}
-    \item \textbf{Superioridad del GARCH:} Para la estimación diaria del VaR, el modelo GJR-GARCH con errores t-Student es superior, logrando una calibración precisa del riesgo de cola y adaptándose rápidamente a los shocks de volatilidad.
-    \item \textbf{Limitaciones del Punto de Cambio Simple:} El modelo bayesiano de un solo punto de cambio resultó ser excesivamente conservador. La dinámica del Bitcoin es demasiado compleja para ser capturada por una varianza constante por tramos; requiere modelos de volatilidad estocástica (SV) o múltiples puntos de cambio.
-    \item \textbf{Eficiencia de Numba:} La implementación con JIT demostró ser altamente efectiva, permitiendo inferencia bayesiana en tiempos competitivos con librerías optimizadas en C.
+    \item \textbf{Competitividad del Enfoque Bayesiano Dinámico:} Al implementar una estrategia de ventana móvil, el modelo de punto de cambio Bayesiano demostró ser tan efectivo como el GARCH para la estimación del VaR, logrando una tasa de fallos casi perfecta (5.23\%).
+    \item \textbf{Robustez Metodológica:} La convergencia de resultados entre dos enfoques fundamentalmente distintos (uno autorregresivo frecuentista y otro de cambio de régimen bayesiano) refuerza la confianza en las estimaciones de riesgo obtenidas.
+    \item \textbf{Trade-off Computacional:} Mientras el GARCH es extremadamente eficiente gracias a su naturaleza recursiva, el enfoque MCMC ofrece una distribución de probabilidad completa y flexibilidad estructural a cambio de un mayor costo computacional, mitigado eficazmente mediante la compilación JIT con Numba.
 \end{enumerate}
 
 Como trabajo futuro, se propone extender el modelo bayesiano a uno de Volatilidad Estocástica completa, aprovechando la infraestructura de cómputo acelerado desarrollada, para combinar la flexibilidad bayesiana con la precisión predictiva de los modelos de volatilidad variable.
