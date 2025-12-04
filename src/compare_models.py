@@ -15,7 +15,7 @@ from src.validation.bootstrap import circular_block_bootstrap, calculate_histori
 plt.style.use('ggplot')
 ALPHA = 0.05 # VaR 95%
 
-def compare_models():
+def compare_models(window_size : int = 365):
     print("⚔️  Iniciando Comparación de Modelos: MCMC vs GARCH...")
 
     # Rutas
@@ -37,23 +37,35 @@ def compare_models():
 
     # 2. Cargar y Procesar Resultados MCMC
     print("   🔹 Cargando MCMC...")
-    mcmc_data = np.load(mcmc_path, allow_pickle=True)
-    sigma1_sq_chain = mcmc_data['sigma1_sq']
-    sigma2_sq_chain = mcmc_data['sigma2_sq']
-    k_chain = mcmc_data['k_samples']
-    burn_in = int(mcmc_data['burn_in'])
+    
+    mcmc_rolling_path = f'results/models/mcmc_rolling_results_{window_size}.npz'
+    
+    if os.path.exists(mcmc_rolling_path):
+        print("      ✅ Usando resultados Rolling MCMC (Dinámico)")
+        mcmc_roll_data = np.load(mcmc_rolling_path)
+        mcmc_vol = mcmc_roll_data['rolling_vol']
+        # Rellenar NaNs iniciales con la primera volatilidad válida (o media)
+        first_valid = np.where(~np.isnan(mcmc_vol))[0][0]
+        mcmc_vol[:first_valid] = mcmc_vol[first_valid]
+    else:
+        print("      ⚠️ Usando resultados MCMC Estáticos (Change-Point Global)")
+        mcmc_data = np.load(mcmc_path, allow_pickle=True)
+        sigma1_sq_chain = mcmc_data['sigma1_sq']
+        sigma2_sq_chain = mcmc_data['sigma2_sq']
+        k_chain = mcmc_data['k_samples']
+        burn_in = int(mcmc_data['burn_in'])
 
-    # Calcular medias posteriores
-    s1_hat = np.mean(sigma1_sq_chain[burn_in:])
-    s2_hat = np.mean(sigma2_sq_chain[burn_in:])
-    k_hat = int(np.mean(k_chain[burn_in:]))
+        # Calcular medias posteriores
+        s1_hat = np.mean(sigma1_sq_chain[burn_in:])
+        s2_hat = np.mean(sigma2_sq_chain[burn_in:])
+        k_hat = int(np.mean(k_chain[burn_in:]))
 
-    # Construir serie de volatilidad MCMC
-    # Sigma_t = sqrt(s1) si t < k else sqrt(s2)
-    T = len(returns)
-    mcmc_vol = np.zeros(T)
-    mcmc_vol[:k_hat] = np.sqrt(s1_hat)
-    mcmc_vol[k_hat:] = np.sqrt(s2_hat)
+        # Construir serie de volatilidad MCMC
+        # Sigma_t = sqrt(s1) si t < k else sqrt(s2)
+        T = len(returns)
+        mcmc_vol = np.zeros(T)
+        mcmc_vol[:k_hat] = np.sqrt(s1_hat)
+        mcmc_vol[k_hat:] = np.sqrt(s2_hat)
 
     # Calcular VaR MCMC (Asumiendo Normalidad según propuesta 5.2)
     # VaR = mu + sigma * Z_alpha (mu=0)
@@ -110,9 +122,13 @@ def compare_models():
     plt.ylabel('Retornos / VaR (%)')
     plt.legend()
 
-    save_path = os.path.join(figures_dir, 'model_comparison.png')
-    plt.savefig(save_path)
+    save_path = os.path.join(figures_dir, f'model_comparison_{window_size}.png')
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"✅ Gráfica guardada en: {save_path}")
 
 if __name__ == "__main__":
-    compare_models()
+    import argparse
+    parser = argparse.ArgumentParser(description="Comparar modelos MCMC y GARCH para VaR.")
+    parser.add_argument('--window_size', type=int, default=365, help='Tamaño de la ventana para MCMC rolling (días).')
+    args = parser.parse_args()
+    compare_models(window_size=args.window_size)
