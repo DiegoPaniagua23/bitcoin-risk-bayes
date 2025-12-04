@@ -74,8 +74,12 @@ email=diego.paniagua@cimat.mx,
 
 %% The abstract is a short summary of the work to be presented in the
 %% article.
+% \begin{abstract}
+%   Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización computacional mediante compilación Just-In-Time (JIT) con Numba y el uso de técnicas de Bootstrap para construir intervalos de confianza sobre las métricas de riesgo (VaR). Los resultados muestran que, aunque el modelo Bayesiano optimizado es computacionalmente eficiente, el modelo GJR-GARCH ofrece una mejor calibración del riesgo de cola según la prueba de Kupiec.
+% \end{abstract}
+
 \begin{abstract}
-  Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización computacional mediante compilación Just-In-Time (JIT) con Numba y el uso de técnicas de Bootstrap para construir intervalos de confianza sobre las métricas de riesgo (VaR). Los resultados muestran que, aunque el modelo Bayesiano optimizado es computacionalmente eficiente, el modelo GJR-GARCH ofrece una mejor calibración del riesgo de cola según la prueba de Kupiec.
+  Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización mediante compilación Just-In-Time (JIT) con Numba, logrando tiempos de inferencia competitivos, y el uso de Bootstrap de Bloques para validar supuestos distribucionales. Los resultados muestran que, si bien la implementación Bayesiana es eficiente, el modelo de punto de cambio simple resulta excesivamente conservador. En contraste, el modelo GJR-GARCH demostró una calibración superior del riesgo de cola al superar la prueba de Kupiec, adaptándose mejor a la rápida reversión a la media de la volatilidad del criptoactivo.
 \end{abstract}
 
 
