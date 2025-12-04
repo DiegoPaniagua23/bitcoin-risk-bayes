@@ -271,17 +271,32 @@ El diseño experimental se dividió en tres fases: calibración, diagnóstico e 
 El modelo GJR-GARCH se implementó utilizando la librería \texttt{arch} de Python. Para el modelo Bayesiano, el Muestreador de Gibbs se desarrolló desde cero. Dado que Python es un lenguaje interpretado, los bucles anidados requeridos para MCMC son ineficientes. Para solucionar esto, se utilizó el decorador \texttt{@jit(nopython=True)} de la librería \texttt{Numba}, que compila las funciones críticas a código máquina LLVM en tiempo de ejecución. Esto permitió realizar 10,000 iteraciones de la cadena de Markov en segundos.
 
 \subsection{Validación de Riesgo (Backtesting)}
-Para evaluar el desempeño de los modelos, se calculó el Valor en Riesgo (VaR) al 95\%.
+La validación de los modelos de riesgo es un paso crítico para asegurar que las estimaciones de pérdida potencial sean fiables. En este estudio, se evaluó el desempeño predictivo mediante el cálculo del Valor en Riesgo (VaR) al 95\% de confianza. El backtesting consiste en comparar las predicciones ex-ante del VaR con los retornos ex-post observados.
+
+Definimos la secuencia de excepciones (hit sequence) $I_t$ como una variable indicadora que toma el valor de 1 si la pérdida realizada excede el VaR estimado, y 0 en caso contrario:
+\begin{equation}
+I_t = \begin{cases} 
+1 & \text{si } r_t < \text{VaR}_t(\alpha) \\
+0 & \text{si } r_t \ge \text{VaR}_t(\alpha)
+\end{cases}
+\end{equation}
+Si el modelo está correctamente calibrado, la esperanza de esta secuencia debe ser igual al nivel de significancia $\alpha$, es decir, $E[I_t] = \alpha$.
 
 \subsubsection{Prueba de Kupiec (POF)}
-La prueba de Proporción de Fallos (Proportion of Failures) de Kupiec \cite{kupiec1995techniques} evalúa la hipótesis nula $H_0: p = \alpha$, donde $p$ es la tasa de fallos observada (días donde $r_t < \text{VaR}_t$). El estadístico de prueba es un Ratio de Verosimilitud (LR):
-\begin{equation}
-LR_{POF} = -2 \ln\left( (1-\alpha)^{N-x} \alpha^x \right) + 2 \ln\left( (1-\hat{p})^{N-x} \hat{p}^x \right)
-\end{equation}
-donde $N$ es el total de observaciones, $x$ el número de fallos y $\hat{p} = x/N$. Bajo $H_0$, $LR_{POF} \sim \chi^2(1)$.
+La prueba de Proporción de Fallos (Proportion of Failures - POF) propuesta por \cite{kupiec1995techniques} es el estándar regulatorio para evaluar la cobertura incondicional del VaR. Esta prueba examina la hipótesis nula $H_0: p = \alpha$, donde $p$ es la probabilidad verdadera de fallo, frente a la alternativa $H_0: p \neq \alpha$.
 
-\subsubsection{Bootstrap de Bloques}
-Para validar los supuestos distribucionales del modelo MCMC (que asume normalidad condicional), se aplicó un Bootstrap Circular por Bloques (Circular Block Bootstrap) a los residuos estandarizados. Esta técnica preserva la estructura de dependencia temporal (autocorrelación) de los residuos al remuestrear bloques contiguos de datos en lugar de observaciones individuales. Se generaron 1,000 muestras bootstrap para construir un intervalo de confianza del 95\% para el cuantil 5\% de los residuos.
+El estadístico de prueba se basa en la razón de verosimilitud (Likelihood Ratio) entre el modelo restringido (bajo $H_0$) y el no restringido (donde la tasa de fallos es la observada $\hat{p} = x/N$). La fórmula del estadístico es:
+\begin{equation}
+LR_{POF} = -2 \ln\left( \frac{(1-\alpha)^{N-x} \alpha^x}{(1-\hat{p})^{N-x} \hat{p}^x} \right)
+\end{equation}
+donde $N$ es el número total de observaciones y $x = \sum I_t$ es el número total de excepciones. Bajo la hipótesis nula, este estadístico se distribuye asintóticamente como una Chi-cuadrada con un grado de libertad, $\chi^2(1)$. Si el valor calculado excede el valor crítico (3.841 para un nivel de confianza del 95\%), se rechaza el modelo, indicando que subestima el riesgo (si $\hat{p} > \alpha$) o que es excesivamente conservador (si $\hat{p} < \alpha$).
+
+\subsubsection{Bootstrap de Bloques Circulares}
+Los métodos de inferencia estándar asumen que las observaciones son independientes e idénticamente distribuidas (i.i.d.). Sin embargo, las series financieras, y en particular sus residuos al cuadrado, suelen exhibir autocorrelación y dependencia temporal (clusters de volatilidad). El uso de un Bootstrap simple en este contexto destruiría la estructura de dependencia, llevando a inferencias erróneas.
+
+Para mitigar este problema, se implementó el método de \textbf{Bootstrap de Bloques Circulares} (Circular Block Bootstrap) propuesto por \cite{politis1992}. Este enfoque consiste en remuestrear bloques contiguos de observaciones de longitud $L$ en lugar de puntos individuales. La propiedad "circular" implica que los datos se tratan como si estuvieran dispuestos en un círculo (el dato $x_N$ es seguido por $x_1$), garantizando que todas las observaciones tengan la misma probabilidad de ser seleccionadas como inicio de un bloque y eliminando los efectos de borde.
+
+En este trabajo, se aplicó esta técnica a los residuos estandarizados del modelo para construir intervalos de confianza robustos al 95\% para el cuantil 5\% de la distribución de pérdidas. Esto permite evaluar si la asunción distribucional (Normal o t-Student) es consistente con los datos observados, sin depender exclusivamente de pruebas paramétricas que podrían ser sensibles a desviaciones menores.
 
 %--------------------------------  Resultados ----------------------------------------%
 \section{Resultados}
