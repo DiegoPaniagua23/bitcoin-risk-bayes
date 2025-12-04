@@ -15,7 +15,7 @@ from src.validation.bootstrap import circular_block_bootstrap, calculate_histori
 plt.style.use('ggplot')
 ALPHA = 0.05 # VaR 95%
 
-def compare_models():
+def compare_models(window_size : int = 365):
     print("⚔️  Iniciando Comparación de Modelos: MCMC vs GARCH...")
 
     # Rutas
@@ -38,7 +38,7 @@ def compare_models():
     # 2. Cargar y Procesar Resultados MCMC
     print("   🔹 Cargando MCMC...")
     
-    mcmc_rolling_path = 'results/models/mcmc_rolling_results.npz'
+    mcmc_rolling_path = f'results/models/mcmc_rolling_results_{window_size}.npz'
     
     if os.path.exists(mcmc_rolling_path):
         print("      ✅ Usando resultados Rolling MCMC (Dinámico)")
@@ -122,9 +122,13 @@ def compare_models():
     plt.ylabel('Retornos / VaR (%)')
     plt.legend()
 
-    save_path = os.path.join(figures_dir, 'model_comparison.png')
+    save_path = os.path.join(figures_dir, f'model_comparison_{window_size}.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     print(f"✅ Gráfica guardada en: {save_path}")
 
 if __name__ == "__main__":
-    compare_models()
+    import argparse
+    parser = argparse.ArgumentParser(description="Comparar modelos MCMC y GARCH para VaR.")
+    parser.add_argument('--window_size', type=int, default=365, help='Tamaño de la ventana para MCMC rolling (días).')
+    args = parser.parse_args()
+    compare_models(window_size=args.window_size)
