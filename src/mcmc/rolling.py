@@ -73,6 +73,13 @@ def run_rolling_mcmc(returns, window_size=252, n_iter=1000, burn_in=200):
     return rolling_vol
 
 if __name__ == "__main__":
+    import argparse
+    # Parsear argumentos
+    parser = argparse.ArgumentParser(description="Ejecutar Rolling MCMC para estimar volatilidad.")
+    parser.add_argument('--window_size', type=int, default=365, help='Tamaño de la ventana móvil (días).')
+    args = parser.parse_args()
+    window_size = args.window_size
+    
     # Cargar datos
     data_path = 'data/btc_log_returns.csv'
     if os.path.exists(data_path):
@@ -80,11 +87,11 @@ if __name__ == "__main__":
         returns = df['Log_Return'].values * 100 # Escalar x100 para consistencia con GARCH
         
         # Ejecutar rolling
-        # Aumentamos ventana a 365 días para mayor estabilidad
-        vol = run_rolling_mcmc(returns, window_size=365, n_iter=1000)
+        window_size = args.window_size  # Usar ventana de 1 año
+        vol = run_rolling_mcmc(returns, window_size=window_size, n_iter=1000)
         
         # Guardar
-        np.savez('results/models/mcmc_rolling_results.npz', rolling_vol=vol, dates=df.index)
-        print("Resultados guardados en results/models/mcmc_rolling_results.npz")
+        np.savez(f'results/models/mcmc_rolling_results_{window_size}.npz', rolling_vol=vol, dates=df.index)
+        print(f"Resultados guardados en results/models/mcmc_rolling_results_{window_size}.npz")
     else:
         print("No se encontró data/btc_log_returns.csv")
