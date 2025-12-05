@@ -15,20 +15,20 @@ def download_and_process():
         os.makedirs(DATA_DIR)
         print(f"Directorio '{DATA_DIR}' creado.")
 
-    print(f"⬇️  Descargando datos para {TICKER} ({START_DATE} a {END_DATE})...")
+    print(f"Descargando datos para {TICKER} ({START_DATE} a {END_DATE})...")
 
     # Descarga de datos
     try:
         df = yf.download(TICKER, start=START_DATE, end=END_DATE, progress=False)
     except Exception as e:
-        print(f"❌ Error al descargar: {e}")
+        print(f"Error al descargar: {e}")
         return
 
     if df.empty:
-        print("❌ No se obtuvieron datos. Verifica tu conexión.")
+        print("No se obtuvieron datos. Verifica tu conexión.")
         return
 
-    print(f"✅ Datos descargados: {len(df)} registros.")
+    print(f"Datos descargados: {len(df)} registros.")
 
     # Seleccionar precio de cierre ajustado
     # yfinance a veces devuelve columnas complejas, simplificamos si es necesario
@@ -36,7 +36,7 @@ def download_and_process():
         df = df.xs(TICKER, axis=1, level=1) if TICKER in df.columns.levels[1] else df
 
     price_col = 'Adj Close' if 'Adj Close' in df.columns else 'Close'
-    print(f"ℹ️  Usando columna: {price_col}")
+    print(f"Usando columna: {price_col}")
 
     # Cálculo de Retornos Logarítmicos: r_t = ln(P_t) - ln(P_{t-1})
     df['Log_Return'] = np.log(df[price_col]) - np.log(df[price_col].shift(1))
@@ -51,11 +51,11 @@ def download_and_process():
     df.to_csv(raw_file)
     df_clean[['Log_Return']].to_csv(processed_file)
 
-    print("\n💾 Archivos guardados:")
+    print("\nArchivos guardados:")
     print(f"   1. Crudos:      {raw_file}")
     print(f"   2. Procesados:  {processed_file}")
 
-    print("\n📊 Vista previa de los retornos:")
+    print("\nVista previa de los retornos:")
     print(df_clean[['Log_Return']].head())
     print(f"\nEstadísticas básicas:")
     print(df_clean['Log_Return'].describe())

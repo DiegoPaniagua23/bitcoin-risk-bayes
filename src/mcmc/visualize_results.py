@@ -14,14 +14,14 @@ def visualize_mcmc_results():
     figures_dir = 'results/figures'
 
     if not os.path.exists(results_path):
-        print(f"❌ No se encontró el archivo de resultados: {results_path}")
+        print(f"No se encontró el archivo de resultados: {results_path}")
         return
 
     if not os.path.exists(figures_dir):
         os.makedirs(figures_dir)
 
     # Cargar resultados
-    print("📂 Cargando resultados MCMC...")
+    print("Cargando resultados MCMC...")
     data = np.load(results_path, allow_pickle=True)
     sigma1_sq = data['sigma1_sq']
     sigma2_sq = data['sigma2_sq']
@@ -62,7 +62,7 @@ def visualize_mcmc_results():
     plt.tight_layout()
     save_path1 = os.path.join(figures_dir, 'mcmc_traceplots.png')
     plt.savefig(save_path1)
-    print(f"✅ Trace plots guardados en: {save_path1}")
+    print(f"Trace plots guardados en: {save_path1}")
     plt.close()
 
     # --- Gráfica 2: Distribuciones Posteriores ---
@@ -86,7 +86,7 @@ def visualize_mcmc_results():
     plt.tight_layout()
     save_path2 = os.path.join(figures_dir, 'mcmc_posteriors.png')
     plt.savefig(save_path2)
-    print(f"✅ Posteriores guardados en: {save_path2}")
+    print(f"Posteriores guardados en: {save_path2}")
     plt.close()
 
     # --- Gráfica 3: Serie de Tiempo con Cambio Detectado ---
@@ -125,7 +125,7 @@ def visualize_mcmc_results():
     plt.tight_layout()
     save_path3 = os.path.join(figures_dir, 'btc_volatility_change.png')
     plt.savefig(save_path3)
-    print(f"✅ Serie de tiempo guardada en: {save_path3}")
+    print(f"Serie de tiempo guardada en: {save_path3}")
     plt.close()
 
 if __name__ == "__main__":

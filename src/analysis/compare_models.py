@@ -6,7 +6,7 @@ import sys
 from scipy.stats import norm
 
 # Agregar root al path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from src.validation.backtest import kupiec_pof_test
 from src.validation.bootstrap import circular_block_bootstrap, calculate_historical_var
@@ -24,7 +24,7 @@ def compare_models(window_size : int = 365):
     figures_dir = 'results/figures'
 
     if not os.path.exists(mcmc_path) or not os.path.exists(garch_path):
-        print("❌ Faltan archivos de resultados. Asegúrate de haber corrido ambos modelos.")
+        print("Faltan archivos de resultados. Asegúrate de haber corrido ambos modelos.")
         return
 
     # 1. Cargar Resultados GARCH
@@ -37,18 +37,18 @@ def compare_models(window_size : int = 365):
 
     # 2. Cargar y Procesar Resultados MCMC
     print("   🔹 Cargando MCMC...")
-    
+
     mcmc_rolling_path = f'results/models/mcmc_rolling_results_{window_size}.npz'
-    
+
     if os.path.exists(mcmc_rolling_path):
-        print("      ✅ Usando resultados Rolling MCMC (Dinámico)")
+        print("Usando resultados Rolling MCMC (Dinámico)")
         mcmc_roll_data = np.load(mcmc_rolling_path)
         mcmc_vol = mcmc_roll_data['rolling_vol']
         # Rellenar NaNs iniciales con la primera volatilidad válida (o media)
         first_valid = np.where(~np.isnan(mcmc_vol))[0][0]
         mcmc_vol[:first_valid] = mcmc_vol[first_valid]
     else:
-        print("      ⚠️ Usando resultados MCMC Estáticos (Change-Point Global)")
+        print("Usando resultados MCMC Estáticos (Change-Point Global)")
         mcmc_data = np.load(mcmc_path, allow_pickle=True)
         sigma1_sq_chain = mcmc_data['sigma1_sq']
         sigma2_sq_chain = mcmc_data['sigma2_sq']
@@ -73,12 +73,12 @@ def compare_models(window_size : int = 365):
     mcmc_var = mcmc_vol * z_score
 
     # 3. Validación: Test de Kupiec
-    print("\n🧪 Ejecutando Test de Kupiec (Backtesting)...")
+    print("\nEjecutando Test de Kupiec (Backtesting)...")
 
     kupiec_garch = kupiec_pof_test(returns, garch_var, alpha=ALPHA)
     kupiec_mcmc = kupiec_pof_test(returns, mcmc_var, alpha=ALPHA)
 
-    print(f"\n   🏆 Resultados Kupiec (Alpha={ALPHA}):")
+    print(f"\nResultados Kupiec (Alpha={ALPHA}):")
     print(f"   {'Modelo':<10} | {'Fallos':<8} | {'Tasa Obs.':<10} | {'p-value':<10} | {'Decisión'}")
     print("-" * 65)
     print(f"   {'GARCH':<10} | {kupiec_garch['failures']:<8} | {kupiec_garch['observed_rate']:.4f}     | {kupiec_garch['p_value']:.4f}     | {'✅ Acepta' if kupiec_garch['decision'] == 0 else '❌ Rechaza'}")
@@ -97,12 +97,12 @@ def compare_models(window_size : int = 365):
     print(f"   Intervalo de Confianza (95%) para el cuantil 5% de residuos MCMC:")
     print(f"   [{lb:.4f}, {ub:.4f}] (Teórico Normal: {z_score:.4f})")
     if lb <= z_score <= ub:
-        print("   ✅ La asunción de Normalidad es razonable (el valor teórico cae en el IC).")
+        print("La asunción de Normalidad es razonable (el valor teórico cae en el IC).")
     else:
-        print("   ⚠️ La asunción de Normalidad podría ser incorrecta (colas más pesadas detectadas).")
+        print("La asunción de Normalidad podría ser incorrecta (colas más pesadas detectadas).")
 
     # 5. Gráfica Comparativa Final
-    print("\n📈 Generando gráfica comparativa...")
+    print("\nGenerando gráfica comparativa...")
     plt.figure(figsize=(15, 7))
 
     # Retornos
@@ -124,7 +124,7 @@ def compare_models(window_size : int = 365):
 
     save_path = os.path.join(figures_dir, f'model_comparison_{window_size}.png')
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Gráfica guardada en: {save_path}")
+    print(f"Gráfica guardada en: {save_path}")
 
 if __name__ == "__main__":
     import argparse

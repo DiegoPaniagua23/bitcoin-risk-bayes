@@ -23,7 +23,7 @@ def train_and_analyze():
     if not os.path.exists(figures_dir): os.makedirs(figures_dir)
 
     # 1. Cargar Datos
-    print("📂 Cargando datos...")
+    print("Cargando datos...")
     df = pd.read_csv(data_path, index_col=0, parse_dates=True)
 
     # ESCALADO IMPORTANTE: Multiplicar por 100 para estabilidad numérica
@@ -31,17 +31,17 @@ def train_and_analyze():
     returns_scaled = df['Log_Return'] * 100
 
     # 2. Instanciar y Ajustar Modelo
-    print("⚙️  Ajustando GJR-GARCH(1,1) con errores t-Student...")
+    print("Ajustando GJR-GARCH(1,1) con errores t-Student...")
     # p=1 (GARCH), o=1 (GJR/Asimetría), q=1 (ARCH)
     garch = GarchModel(p=1, o=1, q=1, dist='t')
     res = garch.fit(returns_scaled)
 
     # 3. Mostrar Resultados
-    print("\n📊 Resumen del Modelo:")
+    print("\nResumen del Modelo:")
     print(res.summary())
 
     metrics = garch.get_aic_bic()
-    print(f"\n📏 Métricas de Ajuste: AIC={metrics['AIC']:.2f}, BIC={metrics['BIC']:.2f}")
+    print(f"\nMétricas de Ajuste: AIC={metrics['AIC']:.2f}, BIC={metrics['BIC']:.2f}")
 
     # 4. Obtener Volatilidad y VaR
     volatility = garch.get_conditional_volatility()
@@ -58,18 +58,17 @@ def train_and_analyze():
 
     results_file = os.path.join(models_dir, 'garch_results.csv')
     results_df.to_csv(results_file)
-    print(f"\n💾 Resultados numéricos guardados en: {results_file}")
+    print(f"\nResultados numéricos guardados en: {results_file}")
 
     # Guardar objeto del modelo (opcional, por si queremos reusarlo sin reentrenar)
-    # Nota: 'arch' objects a veces son tricky con pickle, pero probemos
     try:
         with open(os.path.join(models_dir, 'garch_model.pkl'), 'wb') as f:
             pickle.dump(res, f)
     except Exception as e:
-        print(f"⚠️ No se pudo serializar el modelo completo: {e}")
+        print(f"No se pudo serializar el modelo completo: {e}")
 
     # 6. Visualización
-    print("📈 Generando gráficas...")
+    print("Generando gráficas...")
 
     # Gráfica A: Retornos vs VaR
     plt.figure(figsize=(14, 6))
@@ -90,7 +89,7 @@ def train_and_analyze():
     plt.tight_layout()
     plt.savefig(os.path.join(figures_dir, 'garch_volatility.png'))
 
-    print("✅ Gráficas guardadas en results/figures/")
+    print("Gráficas guardadas en results/figures/")
 
 if __name__ == "__main__":
     train_and_analyze()
