@@ -1,0 +1,513 @@
+%% The first command in your LaTeX source must be the \documentclass command.
+%% Options: hf: enable header and footer.
+\documentclass[
+% twocolumn,
+% hf,
+]{ceurart}
+
+%% One can fix some overfulls
+%\sloppy
+
+
+%% Float package for H placement
+\usepackage{float}
+\restylefloat{figure}
+
+%%
+%% end of the preamble, start of the body of the document source.
+\begin{document}
+
+%%
+%% Rights management information.
+%% CC-BY is default license.
+\copyrightyear{2025} % Actualizado para REST-MEX 2025
+\copyrightclause{Copyright for this paper by its authors.
+  Use permitted under Creative Commons License Attribution 4.0
+  International (CC BY 4.0).}
+
+%%
+%% This command is for the conference information
+% \conference{IberLEF 2025: International Iberian Languages Evaluation Forum, September 2025, Spain.}
+\conference{Proyecto Final - Cómputo Estadístico, CIMAT, 2025}
+
+
+%%
+%% The "title" command
+\title{Inferencia Bayesiana de Puntos de Cambio y Riesgo en Bitcoin: JIT-MCMC vs. GJR-GARCH}
+% \subtitle{Clasificación de Polaridad, Tipo de Destino e Identificación de Pueblos Mágicos} % Subtítulo opcional
+
+% \tnotemark[1] % Si necesitas una nota para el título
+% \tnotetext[1]{Este trabajo fue parcialmente financiado por XYZ.}
+
+%%
+%% The "author" command and its associated commands are used to define
+%% the authors and their affiliations.
+
+% --- Equipo ---
+\author[1]{Gustavo Hernández-Angeles}[
+orcid=0009-0001-3160-5294,
+email=gustavo.hernandez@cimat.mx,
+]\cormark[1] % Marca de autor de correspondencia
+
+\author[1]{Fco Javier Tiscareño-Alcantar}[
+orcid=0009-0000-9151-1110,
+email=francisco.tiscareno@cimat.mx,
+]
+
+\author[1]{Diego Paniagua-Molina}[
+orcid=0009-0006-6564-2794,
+email=diego.paniagua@cimat.mx,
+]
+
+
+% --- Afiliaciones ---
+\address[1]{Mathematics Research Center (CIMAT—Centro de Investigación en Matemáticas), Graduate Program in Statistical Computing, Nuevo León, Mexico}
+
+
+
+%% Footnotes
+\cortext[1]{Corresponding author.}
+% \fntext[1]{Estos autores contribuyeron de igual manera (These authors contributed equally).}
+
+
+%% The abstract is a short summary of the work to be presented in the
+%% article.
+% \begin{abstract}
+%   Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización computacional mediante compilación Just-In-Time (JIT) con Numba y el uso de técnicas de Bootstrap para construir intervalos de confianza sobre las métricas de riesgo (VaR). Los resultados muestran que, aunque el modelo Bayesiano optimizado es computacionalmente eficiente, el modelo GJR-GARCH ofrece una mejor calibración del riesgo de cola según la prueba de Kupiec.
+% \end{abstract}
+
+\begin{abstract}
+  Este proyecto investiga la dinámica de la volatilidad extrema en el mercado de Bitcoin (BTC-USD) durante el periodo 2019-2024. Se contrasta un enfoque econométrico robusto (GJR-GARCH con errores t-Student) frente a una metodología computacional intensiva basada en Inferencia Bayesiana (Change-Point Detection vía Gibbs Sampling). El diferenciador técnico reside en la optimización mediante compilación Just-In-Time (JIT) con Numba, logrando tiempos de inferencia competitivos, y el uso de Bootstrap de Bloques para validar supuestos distribucionales. Los resultados muestran que la implementación Bayesiana con estrategia de ventana móvil (Rolling Window) logra una adaptación dinámica comparable al modelo econométrico. Ambos modelos superaron la prueba de Kupiec, demostrando una calibración adecuada del riesgo de cola. Mientras el GJR-GARCH destaca por su eficiencia recursiva, el enfoque Bayesiano ofrece robustez mediante la re-estimación diaria de regímenes de volatilidad local.
+\end{abstract}
+
+
+%%
+%% Keywords. The author(s) should pick words that accurately describe
+%% the work being presented. Separate the keywords with \sep.
+\begin{keywords}
+  Bitcoin \sep Volatilidad \sep GJR-GARCH \sep Gibbs Sampling \sep MCMC \sep Numba \sep Value at Risk \sep Change-Point Detection
+\end{keywords}
+
+%%
+%% This command processes the author and affiliation and title
+%% information and builds the first part of the formatted document.
+\maketitle
+
+%--------------------------------------------------------------------------
+%	CUERPO DEL ARTÍCULO
+%--------------------------------------------------------------------------
+%-------------------- Introduccion --------------------------------------------%
+\section{Introducción}
+
+Las series de tiempo de criptoactivos, como el Bitcoin (BTC), presentan desafíos únicos para el modelado financiero y la gestión de riesgos. A diferencia de los activos tradicionales, las criptomonedas exhiben una volatilidad extrema, “colas pesadas” (fat tails) y cambios de régimen abruptos impulsados por factores exógenos, regulatorios y tecnológicos. La correcta estimación del riesgo de mercado, cuantificado comúnmente a través del Valor en Riesgo (VaR), es crucial tanto para inversores institucionales como para el cumplimiento de normativas internacionales como Basilea III.
+
+Los modelos econométricos clásicos, como el GARCH (Generalized Autoregressive Conditional Heteroskedasticity), asumen a menudo distribuciones normales que subestiman la probabilidad de eventos extremos. Variantes como el GJR-GARCH han sido propuestas para capturar asimetrías (efecto apalancamiento), pero su estimación suele basarse en máxima verosimilitud, lo cual puede ser inestable en muestras finitas o con ruido excesivo.
+
+Como alternativa, la inferencia bayesiana ofrece un marco flexible para incorporar incertidumbre en los parámetros y modelar cambios estructurales explícitos. Sin embargo, los métodos de Monte Carlo vía Cadenas de Markov (MCMC) requeridos para su estimación son computacionalmente costosos, lo que ha limitado su adopción en aplicaciones de alta frecuencia.
+
+% --- AGREGADO: contextualización cuantitativa ---
+Estudios recientes muestran que el Bitcoin presenta curtosis extremadamente elevada (superior a 15 en varios periodos) y episodios de pérdidas diarias superiores al 20\%, lo cual lo convierte en un activo con una de las distribuciones de retornos más extremas entre los mercados financieros. Estos hechos empíricos refuerzan la necesidad de modelos que capturen adecuadamente tanto la persistencia como la severidad de los shocks.
+
+% --- AGREGADO: brecha en la literatura ---
+Aunque los modelos GARCH han sido ampliamente utilizados, existe evidencia de que no siempre detectan de forma temprana cambios abruptos en la volatilidad. Por otro lado, los modelos bayesianos de cambio de régimen suelen ser más sensibles a estas transiciones, pero su costo computacional dificulta su implementación práctica. Esta tensión entre precisión y eficiencia motiva la comparación presentada en este trabajo.
+
+% --- AGREGADO: contribuciones claras ---
+\textbf{Las contribuciones principales de este estudio son las siguientes:}
+\begin{enumerate}
+    \item Implementación de un modelo \textbf{GJR-GARCH(1,1)} con innovaciones t-Student para capturar colas pesadas y evaluar su calibración mediante backtesting.
+    \item Desarrollo de un modelo bayesiano de \textbf{Detección de Puntos de Cambio} con muestreo de Gibbs optimizado mediante Numba JIT, reduciendo el tiempo de inferencia en más de un orden de magnitud.
+    \item Comparación empírica entre ambos modelos en la estimación del \textbf{VaR} y en la frecuencia de violaciones según la \textbf{prueba de Kupiec}.
+\end{enumerate}
+
+% --- AGREGADO: estructura ---
+El resto del documento se organiza de la siguiente manera: la Sección 2 presenta el marco teórico, la Sección 3 describe los datos utilizados, la Sección 4 detalla la metodología, la Sección 5 reporta los resultados empíricos y pruebas de validación, y la Sección 6 ofrece conclusiones y líneas de trabajo futuro.
+
+
+
+
+
+%----------------------- Marco Teorico ------------------------------------%
+\section{Marco Teórico}
+
+\subsection{Modelo GJR-GARCH con Errores t-Student}
+
+Las series de tiempo financieras exhiben dos propiedades estilizadas fundamentales:
+(i) \textit{colas pesadas} (fat tails), donde la probabilidad de eventos extremos es mayor que la predicha por una distribución Normal, y
+(ii) \textit{asimetría en la volatilidad}, también conocida como \textit{efecto apalancamiento} (leverage effect), documentado inicialmente por \cite{black1976}.
+En este fenómeno, los choques negativos incrementan la volatilidad futura más que los choques positivos de igual magnitud. Esta característica es especialmente pronunciada en mercados altamente especulativos como Bitcoin, donde las caídas tienden a desencadenar respuestas abruptas en la incertidumbre futura.
+
+Para capturar esta asimetría, \cite{glosten1993relation} propusieron el modelo GJR-GARCH como una extensión del modelo GARCH(1,1) originalmente introducido por \cite{bollerslev1986} basándose en el marco ARCH de \cite{engle1982}.
+
+Sea $r_t = \mu + \epsilon_t$, con $\epsilon_t = \sigma_t z_t$ y $z_t$ innovaciones estandarizadas. La varianza condicional evoluciona según:
+
+\begin{equation}
+    \sigma_t^2 =
+    \omega
+    + \alpha \epsilon_{t-1}^2
+    + \gamma I_{t-1}\epsilon_{t-1}^2
+    + \beta \sigma_{t-1}^2,
+\end{equation}
+
+donde cada parámetro cumple un rol específico en la dinámica de la volatilidad:
+
+\begin{itemize}
+
+    \item \textbf{$\omega > 0$ (término constante).}
+    Controla el nivel base de volatilidad en la serie.
+    Valores mayores de $\omega$ implican un nivel mínimo de variabilidad incluso en ausencia de shocks,
+    mientras que valores pequeños generan volatilidad “reactiva”, dominada por los choques pasados.
+
+    \item \textbf{$\alpha \ge 0$ (sensibilidad a choques).}
+    Mide cuánto influye el tamaño del shock reciente $\epsilon_{t-1}^2$ sobre la volatilidad futura.
+    Un $\alpha$ grande implica que la serie responde fuertemente a las noticias del día anterior,
+    independientemente del signo del retorno.
+    Este parámetro captura el \textit{efecto ARCH} tradicional.
+
+    \item \textbf{$\gamma \ge 0$ (efecto de apalancamiento).}
+    Modula la respuesta asimétrica de la volatilidad ante choques negativos.
+    El indicador $I_{t-1} = \mathbb{I}(\epsilon_{t-1} < 0)$ distingue choques negativos de positivos.
+    Así, el impacto total de un shock negativo es:
+    \[
+        \alpha + \gamma,
+    \]
+    mientras que el de un shock positivo es simplemente $\alpha$.
+    Si $\gamma > 0$, los retornos negativos generan incrementos más pronunciados en la volatilidad,
+    reflejando el fenómeno empírico de que ``las malas noticias pesan más que las buenas''.
+
+    \item \textbf{$\beta \ge 0$ (persistencia de la volatilidad).}
+    Representa el efecto de la varianza pasada $\sigma_{t-1}^2$ sobre la volatilidad actual.
+    Un valor grande de $\beta$ indica que la volatilidad decae lentamente después de un shock,
+    generando los característicos ``clusters'' de volatilidad observados en datos financieros.
+    Cuando $\beta$ está cerca de 1, la serie presenta alta memoria y periodos prolongados de turbulencia.
+
+\end{itemize}
+
+La combinación de estos parámetros determina la dinámica completa de la volatilidad.
+La condición de estacionariedad del modelo,
+
+\begin{equation}
+    \alpha + \frac{\gamma}{2} + \beta < 1,
+\end{equation}
+
+garantiza que la volatilidad condicional no diverja en el largo plazo y que la serie posea una varianza incondicional finita.
+
+En conjunto, los parámetros $(\alpha, \gamma, \beta)$ permiten distinguir tres efectos clave:
+\begin{enumerate}
+    \item \textbf{Tamaño del shock} ($\epsilon_{t-1}^2$)
+    controla la magnitud de la reacción.
+    \item \textbf{Signo del shock} ($I_{t-1}$)
+    introduce asimetría en la respuesta.
+    \item \textbf{Persistencia temporal} ($\beta$)
+    determina cuánto dura la volatilidad elevada.
+\end{enumerate}
+
+Esta parametrización hace del GJR-GARCH un modelo especialmente adecuado para activos como Bitcoin, donde los choques negativos tienden a generar incrementos abruptos y duraderos de volatilidad.
+
+
+Por otro lado dado que los retornos de Bitcoin presentan curtosis elevada y caídas extremas más frecuentes que las subidas, se modelan las innovaciones $z_t$ mediante una distribución t-Student con $\nu$ grados de libertad, siguiendo las recomendaciones de \cite{tsay2010}, cuya función de densidad es:
+\begin{equation}
+f(z|\nu) = \frac{\Gamma(\frac{\nu+1}{2})}{\sqrt{\nu\pi}\Gamma(\frac{\nu}{2})} \left(1 + \frac{z^2}{\nu}\right)^{-\frac{\nu+1}{2}}
+\end{equation}
+Esta distribución mejora la captura de colas pesadas y evita la subestimación del riesgo extremo inherente al supuesto normal.
+
+
+\subsection{Modelo Bayesiano de Punto de Cambio (Change-Point)}
+Se propone un modelo jerárquico donde la varianza de los retornos sufre un cambio estructural en un momento desconocido $k \in \{1, \dots, T\}$.
+\begin{equation}
+y_{t} \sim \mathcal{N}(0, \sigma_{t}^{2}), \quad \sigma_{t}^{2} = \begin{cases} \sigma_1^2 & \text{si } t \le k \\ \sigma_2^2 & \text{si } t > k \end{cases}
+\end{equation}
+
+\subsubsection{Especificación de Priors}
+Se utilizan priores conjugados para facilitar el muestreo de Gibbs:
+\begin{itemize}
+    \item \textbf{Punto de cambio:} Prior uniforme discreta sobre el dominio temporal.
+    \begin{equation}
+    k \sim \mathcal{U}\{1, T\}
+    \end{equation}
+    \item \textbf{Varianzas:} Prior Inversa-Gamma para asegurar positividad.
+    \begin{equation}
+    \sigma_i^2 \sim \mathcal{IG}(\alpha, \beta), \quad i \in \{1, 2\}
+    \end{equation}
+\end{itemize}
+
+\subsubsection{Inferencia vía Gibbs Sampling}
+El algoritmo alterna entre muestrear las varianzas condicionales al punto de cambio y muestrear el punto de cambio condicional a las varianzas:
+1. \textbf{Muestrear $\sigma_i^2 | k, \mathbf{y}$:} Dado $k$, los datos se dividen en dos grupos. La posterior es también Inversa-Gamma debido a la conjugación.
+2. \textbf{Muestrear $k | \sigma_1^2, \sigma_2^2, \mathbf{y}$:} Se calcula la verosimilitud marginal para cada posible punto de corte $t$ y se muestrea de la distribución multinomial resultante.
+\begin{equation}
+P(k=t | \cdot) \propto \prod_{i=1}^t \mathcal{N}(y_i | 0, \sigma_1^2) \prod_{j=t+1}^T \mathcal{N}(y_j | 0, \sigma_2^2)
+\end{equation}
+
+\section{Análisis de Datos}
+
+Se utilizaron datos históricos diarios de precios de cierre ajustados del par Bitcoin vs Dólar Estadounidense (BTC-USD), obtenidos a través de la API de Yahoo Finance. El periodo de análisis abarca desde el 1 de enero de 2019 hasta el 1 de enero de 2024, cubriendo eventos significativos como la crisis del COVID-19 (marzo 2020) y el colapso de FTX (noviembre 2022).
+
+La serie de precios $P_t$ fue transformada a retornos logarítmicos diarios mediante la fórmula $r_{t}=100 \cdot (\ln(P_{t})-\ln(P_{t-1}))$. La Tabla \ref{tab:stats} presenta las estadísticas descriptivas de la serie.
+
+\begin{table}[h]
+\centering
+\caption{Estadísticas Descriptivas de los Retornos Diarios de Bitcoin (\%)}
+\label{tab:stats}
+\begin{tabular}{lr}
+\toprule
+Estadístico & Valor \\
+\midrule
+Media & 0.13 \\
+Desviación Estándar & 3.53 \\
+Mínimo & -46.47 \\
+Máximo & 17.18 \\
+Asimetría (Skewness) & -1.22 \\
+Curtosis (Kurtosis) & 18.96 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Se observa una curtosis extremadamente alta (18.96), muy superior a la de una distribución normal (3.0), lo que confirma la presencia de colas pesadas (leptocurtosis). Asimismo, la asimetría negativa (-1.22) indica una mayor propensión a caídas extremas que a subidas extremas, justificando el uso de distribuciones asimétricas y de colas pesadas como la t-Student en el modelado GARCH.
+
+%---------------------- Metodologia --------------------------------------------%
+\section{Metodología}
+
+El diseño experimental se dividió en tres fases: calibración, diagnóstico e inferencia.
+
+\subsection{Implementación Computacional}
+El modelo GJR-GARCH se implementó utilizando la librería \texttt{arch} de Python. Para el modelo Bayesiano, el Muestreador de Gibbs se desarrolló desde cero. Dado que Python es un lenguaje interpretado, los bucles anidados requeridos para MCMC son ineficientes. Para solucionar esto, se utilizó el decorador \texttt{@jit(nopython=True)} de la librería \texttt{Numba}, que compila las funciones críticas a código máquina LLVM en tiempo de ejecución. Esto permitió realizar 10,000 iteraciones de la cadena de Markov en segundos.
+
+\subsection{Estrategia de Estimación Temporal}
+Una diferencia fundamental entre los modelos comparados radica en su mecanismo de actualización de información:
+
+\begin{itemize}
+    \item \textbf{GJR-GARCH:} Este modelo opera de manera recursiva con memoria teóricamente infinita. La volatilidad de hoy $\sigma_t^2$ depende explícitamente de la volatilidad de ayer $\sigma_{t-1}^2$ y del shock de ayer $\epsilon_{t-1}^2$. El algoritmo se inicializa en $t=0$ (usualmente con la varianza incondicional) y evoluciona paso a paso, incorporando nueva información instantáneamente a través de la ecuación de actualización.
+
+    \item \textbf{MCMC (Ventana Móvil):} A diferencia del enfoque recursivo, el modelo Bayesiano de punto de cambio no tiene una estructura autorregresiva explícita. Para capturar la dinámica temporal, se implementó una estrategia de \textit{Rolling Window} de tamaño fijo $W=365$ días.
+    Para cada día $t$, el modelo se re-entrena utilizando exclusivamente el conjunto de información $\mathcal{F}_{t-1} = \{r_{t-W}, \dots, r_{t-1}\}$. El Gibbs Sampler identifica el régimen de volatilidad vigente al final de esta ventana y lo utiliza como predictor para $\sigma_t$. Esta técnica permite que el modelo se adapte a cambios estructurales recientes, "olvidando" regímenes antiguos que ya no son relevantes, aunque a un costo computacional significativamente mayor que el enfoque recursivo.
+\end{itemize}
+
+\subsection{Validación de Riesgo (Backtesting)}
+La validación de los modelos de riesgo es un paso crítico para asegurar que las estimaciones de pérdida potencial sean fiables. En este estudio, se evaluó el desempeño predictivo mediante el cálculo del Valor en Riesgo (VaR) al 95\% de confianza. El backtesting consiste en comparar las predicciones ex-ante del VaR con los retornos ex-post observados.
+
+Definimos la secuencia de excepciones (hit sequence) $I_t$ como una variable indicadora que toma el valor de 1 si la pérdida realizada excede el VaR estimado, y 0 en caso contrario:
+\begin{equation}
+I_t = \begin{cases}
+1 & \text{si } r_t < \text{VaR}_t(\alpha) \\
+0 & \text{si } r_t \ge \text{VaR}_t(\alpha)
+\end{cases}
+\end{equation}
+Si el modelo está correctamente calibrado, la esperanza de esta secuencia debe ser igual al nivel de significancia $\alpha$, es decir, $E[I_t] = \alpha$.
+
+\subsubsection{Prueba de Kupiec (POF)}
+La prueba de Proporción de Fallos (Proportion of Failures - POF) propuesta por \cite{kupiec1995techniques} es el estándar regulatorio para evaluar la cobertura incondicional del VaR. Esta prueba examina la hipótesis nula $H_0: p = \alpha$, donde $p$ es la probabilidad verdadera de fallo, frente a la alternativa $H_0: p \neq \alpha$.
+
+El estadístico de prueba se basa en la razón de verosimilitud (Likelihood Ratio) entre el modelo restringido (bajo $H_0$) y el no restringido (donde la tasa de fallos es la observada $\hat{p} = x/N$). La fórmula del estadístico es:
+\begin{equation}
+LR_{POF} = -2 \ln\left( \frac{(1-\alpha)^{N-x} \alpha^x}{(1-\hat{p})^{N-x} \hat{p}^x} \right)
+\end{equation}
+donde $N$ es el número total de observaciones y $x = \sum I_t$ es el número total de excepciones. Bajo la hipótesis nula, este estadístico se distribuye asintóticamente como una Chi-cuadrada con un grado de libertad, $\chi^2(1)$. Si el valor calculado excede el valor crítico (3.841 para un nivel de confianza del 95\%), se rechaza el modelo, indicando que subestima el riesgo (si $\hat{p} > \alpha$) o que es excesivamente conservador (si $\hat{p} < \alpha$).
+
+\subsubsection{Bootstrap de Bloques Circulares}
+Los métodos de inferencia estándar asumen que las observaciones son independientes e idénticamente distribuidas (i.i.d.). Sin embargo, las series financieras, y en particular sus residuos al cuadrado, suelen exhibir autocorrelación y dependencia temporal (clusters de volatilidad). El uso de un Bootstrap simple en este contexto destruiría la estructura de dependencia, llevando a inferencias erróneas.
+
+Para mitigar este problema, se implementó el método de \textbf{Bootstrap de Bloques Circulares} (Circular Block Bootstrap) propuesto por \cite{politis1992}. Este enfoque consiste en remuestrear bloques contiguos de observaciones de longitud $L$ en lugar de puntos individuales. La propiedad "circular" implica que los datos se tratan como si estuvieran dispuestos en un círculo (el dato $x_N$ es seguido por $x_1$), garantizando que todas las observaciones tengan la misma probabilidad de ser seleccionadas como inicio de un bloque y eliminando los efectos de borde.
+
+En este trabajo, se aplicó esta técnica a los residuos estandarizados del modelo para construir intervalos de confianza robustos al 95\% para el cuantil 5\% de la distribución de pérdidas. Esto permite evaluar si la asunción distribucional (Normal o t-Student) es consistente con los datos observados, sin depender exclusivamente de pruebas paramétricas que podrían ser sensibles a desviaciones menores.
+
+%--------------------------------  Resultados ----------------------------------------%
+\section{Resultados}
+
+%%-----------     Resultados del Modelo GJR-GARCH ---------------------------------------------%
+\subsection{Resultados del Modelo GJR-GARCH}
+
+En esta sección se presentan los resultados obtenidos tras ajustar un modelo GJR-GARCH(1,1) con errores t-Student a los retornos logarítmicos diarios de Bitcoin para el periodo 2019–2024.
+
+\subsubsection{Interpretación del Ajuste del Modelo}
+
+El modelo estimado corresponde a un GJR-GARCH(1,1) con distribución t-Student, adecuado para capturar colas pesadas y dinámica de volatilidad en series financieras como Bitcoin.
+
+El parámetro de media estimado fue:
+\[
+\mu = 0.0842, \qquad p = 0.082,
+\]
+lo que indica que el retorno promedio diario no es estadísticamente significativo al 5\%. Esto es consistente con la teoría financiera, donde la dinámica está dominada por cambios de volatilidad más que por la media.
+
+\vspace{0.3cm}
+\noindent\textbf{Parámetros del modelo de volatilidad:}
+
+\begin{itemize}
+    \item \textbf{Término constante:} $\omega = 0.1136$ (p=0.586), no significativo. Sugiere que la volatilidad base es baja comparada con la contribución de choques pasados y persistencia.
+
+    \item \textbf{Sensibilidad a choques:} $\alpha = 0.0728$ (p $<10^{-6}$), altamente significativo. Indica que los shocks recientes tienen un impacto considerable sobre la volatilidad futura.
+
+    \item \textbf{Efecto de apalancamiento:} $\gamma = -0.0298$ (p = 0.222), no significativo. No se detecta evidencia de asimetría; Bitcoin reacciona de manera similar ante choques positivos y negativos.
+
+    \item \textbf{Persistencia:} $\beta = 0.9421$ (p $< 10^{-130}$), extremadamente significativo. Refleja alta persistencia en la volatilidad: una vez que el mercado entra en un periodo de alta incertidumbre, tarda en volver a la normalidad.
+\end{itemize}
+
+La condición de estacionariedad del modelo,
+\[
+\alpha + \frac{\gamma}{2} + \beta < 1, \
+\]
+obtenemos que \( \alpha + \frac{\gamma}{2} + \beta
+= 0.0728 + \frac{-0.0298}{2} + 0.9421
+\approx 0.999 \) el cual se encuentra muy cercana al umbral, lo que es típico en activos altamente volátiles como Bitcoin.
+
+\vspace{0.3cm}
+\noindent\textbf{Distribución t-Student:}
+
+\[
+\nu = 2.9639,
+\]
+
+lo cual implica colas extremadamente pesadas y una alta probabilidad de eventos extremos. Este valor es coherente con la curtosis elevada observada en los datos.
+
+\vspace{0.3cm}
+\noindent\textbf{Métricas del modelo:}
+
+\[
+\text{AIC} = 9235.77, \qquad \text{BIC} = 9268.92,
+\]
+
+utilizadas para comparación con otros modelos en estudios posteriores.
+
+\subsubsection{Análisis del VaR 95\%}
+
+En la Figura~\ref{fig:var_garch} se muestra la comparación entre los retornos diarios y el Value at Risk (VaR) al 95\% estimado con el modelo GJR-GARCH.
+
+El VaR presenta una trayectoria suave que se ajusta a los periodos donde la volatilidad es persistente. En periodos normales, el VaR ronda valores entre \(-5\%\) y \(-7\%\). En momentos de alta incertidumbre, como durante la caída por COVID-19, el VaR se vuelve considerablemente más negativo (hasta cerca de \(-12\%\)).
+
+Se observan algunas violaciones del VaR que ocurren cuando los retornos diarios caen por debajo del límite estimado. Sin embargo, la frecuencia de estas violaciones es consistente con el nivel de confianza del 95\%, lo que coincide con que el modelo GJR-GARCH pasa la prueba de Kupiec (POF), indicando una calibración adecuada del riesgo de cola.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\linewidth]{../results/figures/garch_var_95.png}
+    \caption{Retornos Diarios de Bitcoin vs VaR 95\% estimado por GJR-GARCH.}
+    \label{fig:var_garch}
+\end{figure}
+
+\subsubsection{Análisis de la Volatilidad Condicional}
+
+La Figura~\ref{fig:vol_garch} muestra la volatilidad condicional estimada $\sigma_t$ por el modelo GJR-GARCH. El comportamiento exhibe los característicos \emph{clusters} de volatilidad observados en series financieras.
+
+El pico más alto ocurre durante marzo de 2020, donde la volatilidad supera el 10\% diario debido al colapso de mercado ocasionado por la pandemia de COVID-19. La alta persistencia del parámetro $\beta$ se refleja en una desaceleración lenta de la volatilidad posterior al evento.
+
+A lo largo del periodo 2022--2023 se observan varios incrementos asociados a eventos como el colapso de FTX. Sin embargo, hacia finales de 2023 y principios de 2024, la volatilidad retorna a niveles más moderados entre 2.5\% y 3\%.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{../results/figures/garch_volatility.png}
+    \caption{Volatilidad Condicional Estimada por el modelo GJR-GARCH.}
+    \label{fig:vol_garch}
+\end{figure}
+
+\subsubsection{Resumen General}
+
+Los resultados sugieren que el modelo GJR-GARCH captura adecuadamente la dinámica de volatilidad del Bitcoin, resaltando:
+
+\begin{itemize}
+    \item Alta persistencia en la volatilidad.
+    \item Colas pesadas en la distribución de retornos.
+    \item Ausencia de efecto apalancamiento significativo.
+    \item VaR bien calibrado según la frecuencia de violaciones observadas.
+\end{itemize}
+
+En conjunto, el modelo demuestra ser adecuado para la estimación de riesgo en mercados altamente volátiles.
+%%%%%%%%
+
+\subsection{Diagnóstico de Convergencia MCMC}
+
+Para garantizar la validez de las inferencias bayesianas, es fundamental verificar la convergencia de las cadenas de Markov. La Figura~\ref{fig:mcmc_trace} muestra los gráficos de traza (traceplots) para los parámetros del modelo de punto de cambio ($\sigma_1^2$, $\sigma_2^2$ y $k$) correspondientes a una ventana de estimación representativa.
+
+Se observa un "mezclado" (mixing) adecuado de las cadenas, sin tendencias visibles ni periodos de estancamiento, lo que sugiere que el muestreador de Gibbs ha explorado eficientemente el espacio de parámetros y ha alcanzado la distribución estacionaria. Esto valida el uso de las muestras posteriores para la estimación de la volatilidad y el VaR.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{../results/figures/mcmc_traceplots.png}
+    \caption{Traceplots de las cadenas MCMC para los parámetros de varianza y punto de cambio. La ausencia de tendencias indica convergencia.}
+    \label{fig:mcmc_trace}
+\end{figure}
+
+\subsection{Análisis de Distribuciones Posteriores}
+
+La Figura~\ref{fig:mcmc_posteriors} presenta las distribuciones posteriores marginales para los parámetros del modelo ($\sigma_1^2$, $\sigma_2^2$ y $k$).
+
+Un hallazgo crucial se observa en la posterior del punto de cambio ($k$). La distribución de probabilidad se concentra densamente alrededor de una fecha específica, coincidiendo con el colapso del exchange FTX (noviembre 2022). Esto indica que el modelo de Gibbs Sampling fue capaz de detectar endógenamente este evento estructural como el detonante de un cambio de régimen en la volatilidad del mercado, validando la capacidad del modelo para identificar puntos de quiebre sin supervisión externa.
+
+Asimismo, las distribuciones de las varianzas ($\sigma_1^2$ y $\sigma_2^2$) muestran una separación clara, confirmando que los regímenes antes y después del evento poseen características de riesgo estadísticamente distintas.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{../results/figures/mcmc_posteriors.png}
+    \caption{Distribuciones posteriores de los parámetros. Nótese la alta concentración de masa de probabilidad del punto de cambio $k$ alrededor del evento de FTX.}
+    \label{fig:mcmc_posteriors}
+\end{figure}
+
+\subsection{Prueba de Kupiec}
+La Tabla \ref{tab:kupiec} resume los resultados del backtesting para un nivel de confianza del 95\% ($\alpha=0.05$).
+
+\begin{table}[h]
+\centering
+\caption{Resultados de la Prueba de Kupiec ($\alpha=0.05$)}
+\label{tab:kupiec}
+\begin{tabular}{lcccc}
+\toprule
+Modelo & Fallos & Tasa Obs. & p-value & Decisión \\
+\midrule
+GARCH & 102 & 0.0550 & 0.3345 & Acepta \\
+MCMC (Rolling) & 97 & 0.0523 & 0.6569 & Acepta \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Ambos modelos superaron satisfactoriamente la prueba de Kupiec. El modelo GJR-GARCH presentó una tasa de fallos del 5.50\% (p-value 0.3345), confirmando su robustez.
+
+Por su parte, la implementación del modelo MCMC con ventana móvil de 365 días logró una tasa de fallos del 5.23\%, extremadamente cercana al nivel teórico del 5\%. Con un p-value de 0.6569, no existe evidencia estadística para rechazar la hipótesis nula de cobertura correcta. Esto demuestra que, al permitir que el modelo Bayesiano actualice sus parámetros dinámicamente, se elimina el sesgo conservador observado en implementaciones estáticas, logrando una calibración de riesgo altamente competitiva.
+
+\subsection{Análisis de Residuos}
+El análisis de Bootstrap sobre los residuos del modelo MCMC generó un intervalo de confianza al 95\% para el cuantil 5\% de $[-1.8371, -1.4675]$. El valor teórico de la distribución normal estándar es $-1.645$. Dado que este valor cae cómodamente dentro del intervalo, la asunción de normalidad condicional dentro de cada régimen es razonable y estadísticamente consistente con los datos observados.
+
+\subsection{Sensibilidad a la Ventana de Estimación}
+
+Un parámetro crítico en la implementación del modelo Bayesiano dinámico es el tamaño de la ventana móvil ($W$). Este hiperparámetro controla el equilibrio entre la capacidad de respuesta del modelo ante nueva información y la estabilidad de sus estimaciones.
+
+Las Figuras~\ref{fig:window_30} y ~\ref{fig:window_365} ilustran este efecto comparando dos configuraciones extremas: una ventana corta de $W=30$ días y una ventana larga de $W=365$ días.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{../results/figures/model_comparison_30.png}
+    \caption{Estimación de VaR con Ventana Corta ($W=30$). El modelo es extremadamente reactivo pero ruidoso.}
+    \label{fig:window_30}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{../results/figures/model_comparison_365.png}
+    \caption{Estimación de VaR con Ventana Larga ($W=365$). El modelo captura tendencias estructurales con mayor suavidad.}
+    \label{fig:window_365}
+\end{figure}
+\label{fig:window_comparison}
+
+Con una ventana corta ($W=30$), el modelo se vuelve hiper-reactivo. El VaR fluctúa violentamente día a día, ajustándose casi instantáneamente a los choques de mercado recientes. Si bien esto minimiza el retraso en la detección de volatilidad, genera una señal de riesgo excesivamente ruidosa. Desde una perspectiva de gestión de portafolios, esto es indeseable, ya que implicaría rebalanceos constantes y costosos.
+
+Por el contrario, la ventana larga ($W=365$) produce una estimación del VaR mucho más estable y suave. Al considerar un historial más amplio, el modelo es capaz de distinguir mejor entre ruido transitorio y cambios estructurales genuinos en el régimen de volatilidad. Esta configuración ofrece una cobertura de riesgo más robusta y operativa, razón por la cual fue seleccionada como la configuración óptima para los resultados principales de este estudio.
+
+%------------------------------ Conclusiones ----------------------------%
+\section{Conclusiones}
+
+Este estudio contrastó un enfoque econométrico clásico (GJR-GARCH) frente a uno bayesiano computacionalmente intensivo (MCMC) para la gestión de riesgo en Bitcoin. Los resultados demuestran que:
+\begin{enumerate}
+    \item \textbf{Competitividad del Enfoque Bayesiano Dinámico:} Al implementar una estrategia de ventana móvil, el modelo de punto de cambio Bayesiano demostró ser tan efectivo como el GARCH para la estimación del VaR, logrando una tasa de fallos casi perfecta (5.23\%).
+    \item \textbf{Robustez Metodológica:} La convergencia de resultados entre dos enfoques fundamentalmente distintos (uno autorregresivo frecuentista y otro de cambio de régimen bayesiano) refuerza la confianza en las estimaciones de riesgo obtenidas.
+    \item \textbf{Trade-off Computacional:} Mientras el GARCH es extremadamente eficiente gracias a su naturaleza recursiva, el enfoque MCMC ofrece una distribución de probabilidad completa y flexibilidad estructural a cambio de un mayor costo computacional, mitigado eficazmente mediante la compilación JIT con Numba.
+\end{enumerate}
+
+Como trabajo futuro, se propone extender el modelo bayesiano a uno de Volatilidad Estocástica completa, aprovechando la infraestructura de cómputo acelerado desarrollada, para combinar la flexibilidad bayesiana con la precisión predictiva de los modelos de volatilidad variable.
+
+
+\bibliography{refs.bib}
+
+%%
+%% If your work has an appendix, this is the place to put it.
+% \appendix
+% \section{Título del Apéndice A}
+% ...
+
+\end{document}
+%%
+%% End of file
